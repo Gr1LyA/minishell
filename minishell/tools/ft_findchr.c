@@ -1,11 +1,25 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   ft_findchr.c                                       :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: tharland <marvin@42.fr>                    +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2022/03/21 15:20:28 by tharland          #+#    #+#             */
+/*   Updated: 2022/03/21 15:20:30 by tharland         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #include "../minishell.h"
 
-size_t  ft_findchr(char *str, char ch)
+int	ft_findchr(char *str, char ch)
 {
-    size_t  i;
+	int	i;
 
-    i = 0;
-    while (str[i] && str[i] != ch)
-        i++;
-    return (i);
+	i = 0;
+	while (str[i] && str[i] != ch)
+		i++;
+	if (!str[i])
+		return (-1);
+	return (i);
 }

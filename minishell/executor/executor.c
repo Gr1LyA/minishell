@@ -1,215 +1,125 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   executor.c                                         :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: tharland <marvin@42.fr>                    +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2022/03/21 15:19:09 by tharland          #+#    #+#             */
+/*   Updated: 2022/03/21 15:19:10 by tharland         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #include "../minishell.h"
-#include <stddef.h>
 
-size_t check_pipe(t_mini *mini)
+void	ft_fork_error(t_mini *mini)
 {
-    size_t  i;
-
-    i = 0;
-    while (mini->pars->next)
-    {
-        i++;
-        mini->pars = mini->pars->next;
-    }
-    mini->pars = mini->head_pars;
-    return (i);
+	ft_putstr_fd("minishell: ", 2);
+	ft_putstr_fd(mini->pars->arg[0], 2);
+	ft_putstr_fd(": command not found\n", 2);
+	exit (ERROR);
 }
 
-char *find_path(char *cmd, char *path)
+void	ft_fork(t_mini *mini)
 {
-    char    **path_split;
-    size_t  i;
-    char    *ret;
-    char    *tmp;
+	char	*path;
+	int		ret;
 
-    if (!path)
-        return (NULL);
-    path_split = ft_split(path, ':');
-    i = 0;
-    while (path_split[i])
-    {
-        tmp = path_split[i];
-        path_split[i] = ft_strjoin(path_split[i], cmd);
-        free(tmp);
-        i++;
-    }
-    free(cmd);
-    i = 0;
-    while (access(path_split[i], 1) != 0 && path_split[i])
-        i++;
-    // printf("path = %s | %zu\n", path_split[i],  i);
-    if (!path_split[i])
-    {
-        i = 0;
-         while (path_split[i])
-            free(path_split[i++]);
-        free(path_split);
-        return (NULL);
-    }
-    ret = ft_strdup(path_split[i]);
-    i = 0;
-    while (path_split[i])
-        free(path_split[i++]);
-    free(path_split);
-    return (ret);
+	signal(SIGINT, SIG_DFL);
+	if (mini->which_close != -1)
+		close(mini->which_close);
+	if (redir(mini))
+		exit (ERROR);
+	ret = builtin(mini);
+	if (ret != -1)
+		exit (ret);
+	if (!mini->pars->arg[0])
+		exit (SUCCESS);
+	if (!ft_strncmp(mini->pars->arg[0], "./", 2)
+		|| !ft_strncmp(mini->pars->arg[0], "../", 3)
+		|| !ft_strncmp(mini->pars->arg[0], "/", 1))
+	{
+		execve(mini->pars->arg[0], mini->pars->arg, mini->env);
+		exit (error_mess(mini->pars->arg[0]));
+	}
+	path = find_path(ft_strjoin("/", mini->pars->arg[0]), mini->path);
+	if (!path)
+		ft_fork_error(mini);
+	execve(path, mini->pars->arg, mini->env);
+	exit (error_mess(mini->pars->arg[0]));
 }
 
-int check_redir(int type, char *name)//че то не так !!!!!!!!!!!!!!!!!!!!!!!!
+void	wait_daughter(t_mini *mini, pid_t *pid, size_t i)
 {
-    // printf("name = %s, type = %d\n", name, type);
-    int fd;
-    char *error_mess;
+	size_t	j;
 
-    fd = -1;
-    error_mess = ft_strjoin("minishell: ", name);
-    // printf("file = %s\n")
-    if (type == RIGHT)
-    {
-        // close(STDOUT);
-        fd = open(name, O_WRONLY | O_CREAT | O_TRUNC, 0664);
-        if (fd == -1)
-            perror(error_mess);
-        else
-        {
-            dup2(fd, STDOUT);
-            close(fd);
-        }
-    }
-    else if (type == D_RIGHT)
-    {
-        // close(STDOUT);
-        fd = open(name, O_WRONLY | O_CREAT | O_APPEND, 0664);
-        if (fd == -1)
-            perror(error_mess);
-        else
-            dup2(fd, STDOUT);
-    }
-    else if (type == LEFT)
-    {
-        // close(STDIN);
-        fd = open(name, O_RDONLY, 0664);
-        if (fd == -1)
-            perror(error_mess);
-        else
-            dup2(fd, STDIN);
-    }
-    // else if (type == RIGHT)
-    // {
-        
-    // }
-    free(error_mess);
-    if (fd == -1)
-        return (ERROR);
-    return (SUCCESS);
+	dup2(mini->in, STDIN);
+	j = 0;
+	while (j < i)
+	{
+		waitpid(pid[j], &(mini->status), 0);
+		j++;
+		if (WIFEXITED(mini->status))
+			mini->status = WEXITSTATUS(mini->status);
+		else if (WIFSIGNALED(mini->status))
+			mini->status = WTERMSIG(mini->status) + 128;
+	}
+	free(pid);
 }
 
-int redir(t_mini *mini)
+void	ft_pipe(size_t num_pipe, size_t i, t_mini *mini)
 {
-    while (mini->pars->red)
-    {
-        if (check_redir(mini->pars->red->type, mini->pars->red->name))
-            return (ERROR);
-        mini->pars->red = mini->pars->red->next;
-    }
-    mini->pars->red = mini->pars->head_red;
-    return (SUCCESS);
+	if (i == 0)
+	{
+		pipe(mini->fd);
+		dup2(mini->fd[1], STDOUT);
+		close(mini->fd[1]);
+		mini->which_close = mini->fd[0];
+	}
+	else if (i < num_pipe)
+	{
+		dup2(mini->fd[0], STDIN);
+		close(mini->fd[0]);
+		close(mini->fd[1]);
+		pipe(mini->fd);
+		dup2(mini->fd[1], STDOUT);
+		close(mini->fd[1]);
+		mini->which_close = mini->fd[0];
+	}
+	else if (i == num_pipe)
+	{
+		dup2(mini->fd[0], STDIN);
+		close(mini->fd[0]);
+		dup2(mini->out, STDOUT);
+		mini->which_close = -1;
+	}
 }
 
-void ft_fork(t_mini *mini)
+int	executor(t_mini *mini)
 {
-    char    *path;
+	size_t	num_pipe;
+	size_t	i;
+	pid_t	*pid;
+	int		ret;
 
-    // ft_signal_def();
-    if (mini->which_close != -1)
-        close(mini->fd[mini->which_close]);
-    if (redir(mini))
-        exit (ERROR);
-    if (!mini->pars->arg[0])
-        exit (SUCCESS);
-    execve(mini->pars->arg[0], mini->pars->arg, mini->env);//для абсолютного пути
-    path = find_path(ft_strjoin("/", mini->pars->arg[0]), mini->path);
-    if (!path)
-    {
-        printf("minishell: %s: command not found\n", mini->pars->arg[0]);//поменять на write вывод в stderror
-        exit (ERROR);
-    }
-    execve(path, mini->pars->arg, mini->env);
-    // exit (ERROR);
-    // return (ERROR);
-}
-
-void    wait_daughter(t_mini *mini, pid_t *pid, size_t i)
-{
-    size_t j;
-
-    j = 0;
-    while (j < i)//ожидаю дочек по очереди
-    {
-        waitpid(pid[j], &(mini->status), 0);
-        // printf("j = %zu\n", j);
-        j++;
-    }
-    free(pid);
-}
-
-void    ft_pipe(size_t num_pipe, size_t i, t_mini *mini)//три варианта: если команда первая, последняя и в промежутке
-{
-    // printf("i = %zu\n", i);
-    if (i == 0)//если первая
-    {
-        pipe(mini->fd);//Создается пайп (2 фд)
-        dup2(mini->fd[1], STDOUT);//Перенаправляется стдоут  и закрывается фд1 (1д)
-        close(mini->fd[1]);
-        mini->which_close = 0;//в форке закрываю fd[0]
-    }
-    else if (i < num_pipe)//если в промежутке
-    {
-        dup2(mini->fd[0], STDIN);
-        close(mini->fd[0]);//если убрать то yes | head | ps виснет
-        close(mini->fd[1]);
-        pipe(mini->fd);
-        dup2(mini->fd[1], STDOUT);
-        close(mini->fd[1]);
-        mini->which_close = 0;//в форке закрываю fd[0]
-    }
-    else if (i == num_pipe)//если последняя команда
-    {
-        dup2(mini->fd[0], STDIN);//Перенаправляется стдин в фд0
-        close(mini->fd[0]);//Закрывается фд0
-        // close(mini->fd[1]);
-        dup2(mini->out, STDOUT);//Востанавливается стдаут
-        mini->which_close = -1;//в форке ничего не закрываю
-        // printf("HI\n");
-    }
-    // printf("i = %zu\n", i);
-}
-
-int executor(t_mini *mini)
-{
-    size_t  num_pipe;//кол-во пайпов
-    size_t  i;
-    pid_t   *pid;
-
-    num_pipe = check_pipe(mini);//num of pipe
-    // printf("num_pipe = %zu\n", num_pipe);
-    pid = malloc(sizeof(pid_t) * (num_pipe + 1));
-    i = 0;
-    while (mini->pars)
-    {
-        if (num_pipe != 0)
-            ft_pipe(num_pipe, i, mini);
-        pid[i] = fork();
-        if (pid[i] == 0)
-            ft_fork(mini);
-        else if (pid[i] < 0)
-            return (ERROR);
-        mini->pars = mini->pars->next;
-        i++;
-    }
-    // printf("HIII\n");
-    wait_daughter(mini, pid, i);
-        // printf("YOO\n");
-
-    mini->pars = mini->head_pars;
-    return (SUCCESS);
+	signal(SIGINT, main_sig2);
+	num_pipe = check_pipe(mini);
+	ret = check_builtin(mini, num_pipe);
+	if (ret == 0 || ret == 1)
+		return (ret);
+	pid = malloc(sizeof(pid_t) * (num_pipe + 1));
+	i = 0;
+	while (mini->pars)
+	{
+		if (num_pipe != 0)
+			ft_pipe(num_pipe, i, mini);
+		pid[i] = fork();
+		if (pid[i] == 0)
+			ft_fork(mini);
+		else if (pid[i++] < 0)
+			return (error_mess("fork"));
+		mini->pars = mini->pars->next;
+	}
+	wait_daughter(mini, pid, i);
+	return (SUCCESS);
 }

@@ -1,14 +1,27 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   env.c                                              :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: tharland <marvin@42.fr>                    +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2022/03/21 15:51:06 by tharland          #+#    #+#             */
+/*   Updated: 2022/03/21 15:51:07 by tharland         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #include "../minishell.h"
 
-void    ft_env(char **env)
+int	ft_env(char **env)
 {
-    size_t i;
+	size_t	i;
 
-    i = 0;
-    while (env[i])
-    {
-        ft_putstr_fd(env[i], STDOUT);
-        ft_putstr_fd("\n", STDOUT);
-        i++;
-    }
+	i = 0;
+	while (env[i])
+	{
+		if (ft_strchr(env[i], '='))
+			printf("%s\n", env[i]);
+		i++;
+	}
+	return (SUCCESS);
 }

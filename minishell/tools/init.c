@@ -1,8 +1,20 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   init.c                                             :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: tharland <marvin@42.fr>                    +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2022/03/21 15:20:57 by tharland          #+#    #+#             */
+/*   Updated: 2022/03/21 15:21:01 by tharland         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #include "../minishell.h"
 
-t_pars *init_pars(void)
+t_pars	*init_pars(void)
 {
-	t_pars *pars;
+	t_pars	*pars;
 
 	pars = malloc(sizeof(t_pars));
 	if (!pars)
@@ -15,14 +27,13 @@ t_pars *init_pars(void)
 	pars->head_chunk = NULL;
 	return (pars);
 }
-int init_mini(t_mini *mini)
+
+int	init_mini(t_mini *mini)
 {
 	mini->which_close = -1;
 	mini->pars = NULL;
-	mini->head_pars = NULL;//заполняю голову списка парс
-    if (get_path(mini))
-	{
-        return (ERROR);
-	}
+	mini->head_pars = NULL;
+	if (get_path(mini))
+		return (error_mess("malloc"));
 	return (SUCCESS);
 }
